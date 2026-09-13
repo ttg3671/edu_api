@@ -24,8 +24,38 @@ jobs:
           fi
 
           mkdir -p ~/.ssh
-          echo "$SSH_KEY" | tr -d '\r' > ~/.ssh/deploy_key
+
+          python3 - << 'PYEOF'
+          import os, base64
+
+          raw = os.environ.get("SSH_KEY", "").strip()
+
+          # If user pasted base64-encoded key
+          try:
+              decoded = base64.b64decode(raw).decode('utf-8')
+              if "PRIVATE KEY" in decoded:
+                  raw = decoded
+          except Exception:
+              pass
+
+          # Replace literal \n characters if newlines were flattened
+          if "\\n" in raw:
+              raw = raw.replace("\\n", "\n")
+
+          # Normalize CRLF to LF
+          raw = raw.replace("\r\n", "\n").replace("\r", "\n").strip() + "\n"
+
+          with open("/home/runner/.ssh/deploy_key", "w") as f:
+              f.write(raw)
+          PYEOF
+
           chmod 600 ~/.ssh/deploy_key
+
+          # Verify key structure
+          ssh-keygen -l -f ~/.ssh/deploy_key || {
+            echo "::error::The SSH key could not be parsed by ssh-keygen. Please check that the full private key was pasted into VPS_SSH_KEY."
+            exit 1
+          }
 
           ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key "$VPS_USER@$VPS_HOST" << 'EOF'
             set -e

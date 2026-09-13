@@ -1,0 +1,19 @@
+services:
+  edu-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: edu_api
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - ./.env.production.local:/app/.env.production.local:ro
+    ports:
+      - "4000:4000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

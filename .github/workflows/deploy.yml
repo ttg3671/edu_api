@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
 
 jobs:
   deploy:
@@ -11,27 +12,36 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Deploy to VPS 2 via SSH
-        uses: appleboy/ssh-action@v1.2.0
-        with:
-          host: ${{ secrets.VPS_HOST || '72.62.27.45' }}
-          username: ${{ secrets.VPS_USER || 'root' }}
-          key: ${{ secrets.VPS_SSH_KEY }}
-          port: 22
-          script_stop: true
-          script: |
-            echo "Navigating to project directory..."
+      - name: Deploy to VPS via SSH
+        env:
+          SSH_KEY: ${{ secrets.VPS_SSH_KEY || secrets.SSH_KEY || secrets.SSH_PRIVATE_KEY || secrets.PRIVATE_KEY }}
+          VPS_HOST: ${{ secrets.VPS_HOST || '72.62.27.45' }}
+          VPS_USER: ${{ secrets.VPS_USER || 'root' }}
+        run: |
+          if [ -z "$SSH_KEY" ]; then
+            echo "::error::Secret VPS_SSH_KEY is empty or missing! Please ensure you added it under: GitHub Repo -> Settings -> Secrets and variables -> Actions -> New repository secret."
+            exit 1
+          fi
+
+          mkdir -p ~/.ssh
+          echo "$SSH_KEY" | tr -d '\r' > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key "$VPS_USER@$VPS_HOST" << 'EOF'
+            set -e
+            echo "=== Deploying edu_api on VPS ==="
             cd /root/edu_api
 
-            echo "Fetching latest changes from GitHub..."
+            echo "Fetching latest changes..."
             git fetch origin main
             git reset --hard origin/main
 
-            echo "Rebuilding and restarting Docker container..."
+            echo "Rebuilding and starting containers..."
             docker compose up -d --build
 
-            echo "Cleaning up dangling Docker images..."
+            echo "Cleaning dangling images..."
             docker image prune -f
 
             echo "Verifying container status..."
             docker compose ps
+          EOF

@@ -122,5 +122,13 @@ export const subscriptionValidators = {
       .bail()
       .matches(/^[A-Za-z0-9-:_]+$/)
       .withMessage('Oops, something went wrong'),
+    param("plan")
+      .trim()
+      .notEmpty()
+      .withMessage("Plan name is required")
+      .bail()
+      .toLowerCase()
+      .matches(safeStringRegex)
+      .withMessage("Plan name must be a string"),
   ]
 }; 

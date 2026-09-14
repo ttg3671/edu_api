@@ -23,7 +23,7 @@ const accessStepsRateLimiter = createEmailRateLimiter({
 });
 
 webLinkRouter.get(
-	"/send-access-steps/:device_id", 
+	"/send-access-steps/:device_id/plans/:plan", 
 	authMiddleware, 
 	accessStepsRateLimiter,
 	subscriptionValidators.websiteLink, 

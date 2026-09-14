@@ -13,7 +13,7 @@ import { sendAccessStepsEmail } from "./mail.controllers.js";
 export const generateWebsiteToken = asyncHandler(async (req, res) => {
   handleValidationErrors(req);
 
-  const {device_id} = req.params;
+  const {device_id, plan} = req.params;
   const user_id = req.user?.id;
 
   if (!user_id) {
@@ -42,7 +42,7 @@ export const generateWebsiteToken = asyncHandler(async (req, res) => {
     WEB_EXPIRES_IN
   );
 
-  const link = `https://www.edumovimiento.com/?src=iosApp&nftoken=${webToken}`;
+  const link = `https://www.edumovimiento.com/?src=iosApp&nftoken=${webToken}&plan=${plan}`;
 
   const displayName = generateNameFromEmail(email);
   const emailResult = await sendAccessStepsEmail(email, link, displayName);

@@ -1844,7 +1844,7 @@ const fetchVimeoVideoData = async (videoId) => {
       method: 'GET',
       path: `/videos/${videoId}`,
       query: {
-        fields: 'files'
+        fields: 'files, pictures'
       }
     }, function (error, body) {
       if (error) {

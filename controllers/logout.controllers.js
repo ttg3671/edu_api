@@ -49,7 +49,7 @@ export const signOut = asyncHandler(async (req, res) => {
   const db = await dbConnectionPromise; 
 
     await db.query(
-      "UPDATE user_devices SET rem_token = NULL WHERE device_id = ? AND user_id = ?", 
+      "UPDATE user_devices SET rem_token = NULL WHERE device_fingerprint = ? AND user_id = ?", 
       [deviceFp, user_id]
     );
     await clearCache(`user_session:${user_id}:${deviceFp}`);

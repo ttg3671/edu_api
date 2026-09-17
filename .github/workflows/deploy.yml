@@ -57,7 +57,7 @@ jobs:
             exit 1
           }
 
-          ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key "$VPS_USER@$VPS_HOST" << 'EOF'
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key "$VPS_USER@$VPS_HOST" << 'EOF' | tee deploy_output.log
             set -e
             echo "=== Deploying edu_api on VPS ==="
             cd /root/edu_api
@@ -72,6 +72,40 @@ jobs:
             echo "Cleaning dangling images..."
             docker image prune -f
 
+            echo "Waiting for container to settle..."
+            sleep 5
+
             echo "Verifying container status..."
             docker compose ps
+
+            echo "=== Recent container logs (last 200 lines) ==="
+            docker compose logs --no-color --tail=200
           EOF
+
+      - name: Publish logs to job summary
+        if: always()
+        run: |
+          {
+            echo "## Deploy & container logs"
+            echo '```'
+            cat deploy_output.log 2>/dev/null || echo "(no log output captured)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Flag errors found in logs
+        if: always()
+        run: |
+          if [ ! -f deploy_output.log ]; then
+            echo "No log file found, skipping error scan."
+            exit 0
+          fi
+
+          if grep -iE "error|exception|unhandled|fatal|traceback" deploy_output.log > errors_found.txt; then
+            echo "::warning::Errors detected in deploy/container logs - see the job summary for full output."
+            while IFS= read -r line; do
+              esc=$(printf '%s' "$line" | sed 's/%/%25/g; s/\r/%0D/g')
+              echo "::error::${esc}"
+            done < errors_found.txt
+          else
+            echo "No error-level lines found in logs."
+          fi

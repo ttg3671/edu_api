@@ -1853,7 +1853,7 @@ const fetchVimeoVideoData = async (videoId) => {
           isSuccess: true,
           data: {
             video: "",
-            // thumbnail_url: ""
+            thumbnail: ""
           }
         });
       }
@@ -1863,7 +1863,7 @@ const fetchVimeoVideoData = async (videoId) => {
           isSuccess: true,
           data: {
             video: "",
-            // thumbnail_url: ""
+            thumbnail: ""
           }
         });
       }
@@ -1872,7 +1872,7 @@ const fetchVimeoVideoData = async (videoId) => {
         isSuccess: true,
         data: {
           video: videoId,
-          // thumbnail: body?.pictures?.base_link
+          thumbnail: body?.pictures?.base_link
         }
       });
     });

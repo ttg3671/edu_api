@@ -39,30 +39,20 @@ export const signOut = asyncHandler(async (req, res) => {
   const user_id = req.user?.id;
   const cookies = req.cookies;
 
-  // console.log(req.cookies);
-
   if (!cookies?.XXAFIT) {
     return res.sendStatus(204);
   }
 
   const refreshToken = cookies.XXAFIT;
 
-  const { device_id } = req.body;
+  const deviceFp = generateDeviceFingerprint(req.body.device_id);
   const db = await dbConnectionPromise; 
 
-  if (device_id) {
-    const deviceFp = /^[a-f0-9]{64}$/i.test(device_id) ? device_id : generateDeviceFingerprint(device_id);
     await db.query(
-      "UPDATE user_devices SET rem_token = NULL WHERE device_fingerprint = ? AND user_id = ?",
-      [deviceFp, user_id]
+      "UPDATE user_devices SET rem_token = NULL WHERE rem_token = ? AND user_id = ?", 
+      [refreshToken, user_id]
     );
     await clearCache(`user_session:${user_id}:${deviceFp}`);
-  } else {
-    await db.query(
-      "UPDATE user_devices SET rem_token = NULL WHERE rem_token = ?", 
-      [refreshToken]
-    );
-  }
 
   await Promise.all([
     clearCache(`user_devices:${user_id}`),

@@ -4,11 +4,14 @@ const logoutRouter = Router();
 
 import { signOut, signOutAdmin } from "../controllers/logout.controllers.js";
 
+import authMiddleware from "../middleware/auth.middleware.js";
+
 import { body } from "express-validator";
 
-logoutRouter.get("/admin", signOutAdmin);
+logoutRouter.get("/admin", authMiddleware, signOutAdmin);
 
 logoutRouter.post("/",
+	authMiddleware,
 	[
 		body('device_id')
 	      .trim()

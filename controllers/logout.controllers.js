@@ -52,6 +52,7 @@ export const signOut = asyncHandler(async (req, res) => {
 
   const deviceFp = generateDeviceFingerprint(req.body.device_id);
   logger.info(`logout deviceFp: ${deviceFp}`, { deviceFp });
+  logger.info(`user_id: ${user_id}`);
 
   const db = await dbConnectionPromise; 
 

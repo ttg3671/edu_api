@@ -48,10 +48,10 @@ export const signOut = asyncHandler(async (req, res) => {
 
   const refreshToken = cookies.XXAFIT;
 
-  logger.info("device_id: ", req.body.device_id);
+  logger.info("logout device", { device_id: req.body.device_id });
 
   const deviceFp = generateDeviceFingerprint(req.body.device_id);
-  logger.info("deviceFp: ", deviceFp)
+  logger.info("logout device fingerprint", { deviceFp });
 
   const db = await dbConnectionPromise; 
 

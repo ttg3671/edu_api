@@ -16,7 +16,7 @@ Welcome to `edu-api`! This document serves as the primary architecture reference
 - **Real-Time Communication**: `socket.io` with Redis broadcast adapters for pushing instant notifications to user devices.
 - **Billing & Subscriptions**: Stripe Checkout, Customer Portal, and signature-verified webhooks.
 - **Media & Push Integrations**: Cloudinary (image assets), Vimeo (video streaming), Firebase Admin (push notifications).
-- **Logging & Monitoring**: `pino` and `pino-http` for structured, low-overhead JSON logging.
+- **Logging & Monitoring**: `winston` (`libs/logger.js`) with `@google-cloud/logging-winston` shipping logs to Google Cloud Logging in production (authenticated with the `FIREBASE_CREDENTIALS` service account; toggle with `GCP_LOGGING_ENABLED`, name with `GCP_LOG_NAME`). `pino-http` still handles HTTP request logs.
 
 ---
 

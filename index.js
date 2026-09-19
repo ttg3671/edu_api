@@ -2,7 +2,7 @@ import http from 'http';
 import io from './config/socket.js';
 import app from './app.js';
 import db from './config/db.js';
-import logger from './libs/logger.js';
+import logger, { flushLogger } from './libs/logger.js';
 import './workers/webhookWorker.js';
 import './workers/emailWorker.js';
 import {
@@ -42,6 +42,7 @@ const shutdown = (signal) => {
         logger.error('Error closing DB:', err);
       }
       if (io.close) io.close();
+      await flushLogger();
       process.exit(0);
     });
   }
@@ -54,7 +55,8 @@ process.on('SIGINT', () => shutdown('SIGINT'));
 process.on('unhandledRejection', (reason, promise) => {
   logger.error('Unhandled Rejection at:', promise, 'reason:', reason);
 });
-process.on('uncaughtException', (err) => {
+process.on('uncaughtException', async (err) => {
   logger.error('Uncaught Exception:', err);
+  await flushLogger();
   process.exit(1);
 });

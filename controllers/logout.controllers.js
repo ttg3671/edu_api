@@ -8,6 +8,7 @@ import {
 } from '../utils/paginationHelper.js';
 import { generateDeviceFingerprint } from "../utils/authHelper.js";
 import { clearCache } from "../utils/cache.js";
+import logger from "../libs/logger.js";
 
 export const signOutAdmin = asyncHandler(async (req, res) => {
   const cookies = req.cookies;
@@ -39,13 +40,19 @@ export const signOut = asyncHandler(async (req, res) => {
   const user_id = req.user?.id;
   const cookies = req.cookies;
 
+  logger.info("cookies: ", req.cookies);
+
   if (!cookies?.XXAFIT) {
     return res.sendStatus(204);
   }
 
   const refreshToken = cookies.XXAFIT;
 
+  logger.info("device_id: ", req.body.device_id);
+
   const deviceFp = generateDeviceFingerprint(req.body.device_id);
+  logger.info("deviceFp: ", deviceFp)
+
   const db = await dbConnectionPromise; 
 
     await db.query(

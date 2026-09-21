@@ -40,7 +40,7 @@ export const signOut = asyncHandler(async (req, res) => {
   const user_id = req.user?.id;
   const cookies = req.cookies;
 
-  // logger.info(`cookies: ${JSON.stringify(req.cookies)}`, { cookies: req.cookies });
+  logger.info(`cookies: ${JSON.stringify(req.cookies)}`, { cookies: req.cookies });
 
   if (!cookies?.XXAFIT) {
     return res.sendStatus(204);
@@ -48,7 +48,7 @@ export const signOut = asyncHandler(async (req, res) => {
 
   const refreshToken = cookies.XXAFIT;
 
-  // logger.info(`logout device_id: ${req.body.device_id}`, { device_id: req.body.device_id });
+  logger.info(`logout device_id: ${req.body.device_id}`, { device_id: req.body.device_id });
 
   const deviceFp = generateDeviceFingerprint(req.body.device_id);
   // logger.info(`logout deviceFp: ${deviceFp}`, { deviceFp });

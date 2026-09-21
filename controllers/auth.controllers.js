@@ -58,7 +58,7 @@ const syncAuthBackend = async (req, res, emailInput, rawFingerprint, password, i
     
   const deviceFingerprint = generateDeviceFingerprint(rawFingerprint, req);
 
-  logger.info(`auth device_id: ${rawFingerprint} device_fingerprint: ${deviceFingerprint}`, { device_id: rawFingerprint, device_fingerprint: deviceFingerprint });
+  // logger.info(`auth device_id: ${rawFingerprint} device_fingerprint: ${deviceFingerprint}`, { device_id: rawFingerprint, device_fingerprint: deviceFingerprint });
 
   try {
     const result = await withTransaction(dbConnectionPromise, async (connection) => {

@@ -356,7 +356,7 @@ export const signInAdmin = asyncHandler(async (req, res) => {
   const email = `${req.body.name}@gmail.com`;
   const { password } = req.body;
 
-  logger.info("Admin sign-in attempt", { email: maskEmail(email) });
+  // logger.info("Admin sign-in attempt", { email: maskEmail(email) });
   
   const db = await dbConnectionPromise;
 

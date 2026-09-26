@@ -351,8 +351,8 @@ export const sendOTP = asyncHandler(async (req, res) => {
 });
 
 export const signInAdmin = asyncHandler(async (req, res) => {
-  logger.info(`Email: ${email}`);
-  logger.info(`req.body: ${req.body}`);
+  // logger.info(`Email: ${email}`);
+  logger.info(`Email: ${req.body.email}`);
 
   handleValidationErrors(req);
   const email = req.body.email?.toLowerCase();

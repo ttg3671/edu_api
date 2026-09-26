@@ -16,7 +16,9 @@ export const signOutAdmin = asyncHandler(async (req, res) => {
   const user_id = req.user?.id;
   const cookies = req.cookies;
 
-  // logger.info(`cookies: ${JSON.stringify(req.cookies)}`, { cookies: req.cookies });
+  logger.info(`user_id: ${user_id}`);
+
+  logger.info(`cookies: ${JSON.stringify(req.cookies)}`);
 
   if (!cookies?.XXAFIT) {
     return res.sendStatus(204);

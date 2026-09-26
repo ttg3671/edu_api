@@ -354,6 +354,9 @@ export const signInAdmin = asyncHandler(async (req, res) => {
   handleValidationErrors(req);
   const email = req.body.email?.toLowerCase();
   const { password } = req.body;
+
+  logger.info(`Email: ${email}`);
+  
   const db = await dbConnectionPromise;
 
   const [[admin]] = await db.query("SELECT id, password FROM admin WHERE email = ? LIMIT 1", [email]);

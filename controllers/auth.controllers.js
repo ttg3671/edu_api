@@ -351,11 +351,12 @@ export const sendOTP = asyncHandler(async (req, res) => {
 });
 
 export const signInAdmin = asyncHandler(async (req, res) => {
+  logger.info(`Email: ${email}`);
+  logger.info(`req.body: ${req.body}`);
+
   handleValidationErrors(req);
   const email = req.body.email?.toLowerCase();
   const { password } = req.body;
-
-  logger.info(`Email: ${email}`);
   
   const db = await dbConnectionPromise;
 

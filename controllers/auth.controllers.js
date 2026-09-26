@@ -11,6 +11,7 @@ import {
   BASE_URL1,
 } from "../config/env.js";
 import logger from "../libs/logger.js";
+import { maskEmail } from "../services/emailSecurity.service.js";
 import stripe from "stripe";
 const stripeInstance = new stripe(STRIPE_SECRET_KEY);
 
@@ -351,11 +352,11 @@ export const sendOTP = asyncHandler(async (req, res) => {
 });
 
 export const signInAdmin = asyncHandler(async (req, res) => {
-  logger.info(`email: ${req.body.email}`, { email: req.body.email });
-
   handleValidationErrors(req);
-  const email = req.body.email?.toLowerCase();
+  const email = `${req.body.name}@gmail.com`;
   const { password } = req.body;
+
+  logger.info("Admin sign-in attempt", { email: maskEmail(email) });
   
   const db = await dbConnectionPromise;
 

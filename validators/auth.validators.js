@@ -82,14 +82,17 @@ export const loginValidator = {
 	],
 
 	admin: [
-		body("email")
-	      .trim()
+		body("name")
+	      .customSanitizer((value) =>
+	        typeof value === "string"
+	          ? value.replace(/\s+/g, "").replace(/@gmail\.com$/i, "").toLowerCase()
+	          : value
+	      )
 	      .notEmpty()
-	      .withMessage("Please add your email")
+	      .withMessage("Please add your name")
 	      .bail()
-		  .isEmail()
-		  .withMessage("Invalid email")
-		  .normalizeEmail(),
+	      .matches(/^[a-z0-9._-]+$/)
+	      .withMessage("Invalid name"),
 	  body("password")
 	      .trim()
 	      .notEmpty()

@@ -257,57 +257,93 @@ export const get_nav_pill_collections = asyncHandler(async (req, res) => {
 export const get_section_content = asyncHandler(async (req, res) => {
   handleValidationErrors(req);
   const { section_id } = req.params;
-  const { limit, cursor, category_id } = getCursorPaginationParams(req.query); // Added category_id from query
+  const { limit } = getCursorPaginationParams(req.query);
+  const { category_id, cursor: rawCursor } = req.query; // getCursorPaginationParams doesn't return category_id, so read it directly
   const db = await dbConnectionPromise;
 
-  const cacheKey = `cache:/api/v1/users/section/${section_id}:limit=${limit}:cursor=${cursor || 'start'}:cat=${category_id || 'none'}`;
+  // collection_modules is paginated by its own `position` (double), while
+  // module_category_mapping has no ordering column of its own, so it's
+  // paginated by module id instead. When both sources are in play we can't
+  // share a single cursor value, so the cursor becomes a small composite
+  // JSON object: { c: <collection position cursor>, m: <module id cursor> }.
+  let collectionCursor = null;
+  let categoryCursor = null;
+
+  if (rawCursor) {
+    if (category_id) {
+      try {
+        const parsed = JSON.parse(rawCursor);
+        collectionCursor = parsed.c != null ? parseInt(parsed.c) : null;
+        categoryCursor = parsed.m != null ? parseInt(parsed.m) : null;
+      } catch {
+        // First request into the category branch after a plain numeric
+        // cursor (or a malformed value) - ignore rather than error.
+        collectionCursor = null;
+        categoryCursor = null;
+      }
+    } else {
+      const asInt = parseInt(rawCursor);
+      collectionCursor = Number.isNaN(asInt) ? null : asInt;
+    }
+  }
+
+  const cacheKey = `cache:/api/v1/users/section/${section_id}:limit=${limit}:cursor=${rawCursor || 'start'}:cat=${category_id || 'none'}`;
 
   const result = await getOrSetCache(cacheKey, async () => {
-    // 1. Fetch Collection Metadata first to maintain response structure
-    const [[collection]] = await db.query(`
-      SELECT id, name, layout_type 
-      FROM collections 
+    // 1. Fetch Collection Metadata (best-effort). A section_id that matches
+    // no collection is no longer a hard error as long as category_id is
+    // also supplied - in that case we still return the category results.
+    const [[collectionRow]] = await db.query(`
+      SELECT id, name, layout_type
+      FROM collections
       WHERE id = ?
     `, [section_id]);
 
-    if (!collection) return null;
+    if (!collectionRow && !category_id) return null;
 
-    // 2. Build Module Query with optional Category Filtering
-    let query = `
-      SELECT m.id, m.title, m.thumbnail_url, m.is_free, cm.collection_id, cm.position
-      FROM collection_modules cm
-      JOIN modules m ON cm.module_id = m.id
-      ${category_id ? 'JOIN module_category_mapping mc ON m.id = mc.module_id' : ''}
-      WHERE cm.collection_id = ? AND m.is_active = 1
-    `;
-    
-    let queryParams = [section_id];
+    const collection = collectionRow || { id: parseInt(section_id), name: null, layout_type: null };
 
+    // 2. Fetch modules from collection_modules ONLY - no category join here.
+    let collectionRows = [];
+    if (collectionRow) {
+      collectionRows = await fetchCollectionModules(db, section_id, collectionCursor, limit);
+    }
+
+    // 3. Fetch modules from module_category_mapping ONLY - a fully separate query.
+    let categoryRows = [];
     if (category_id) {
-      query += ` AND mc.category_id = ?`;
-      queryParams.push(category_id);
+      categoryRows = await fetchCategoryModules(db, category_id, categoryCursor, limit);
     }
 
-    if (cursor) {
-      query += ` AND cm.position > ?`;
-      queryParams.push(cursor);
-    }
+    // 4. Union the two sources (de-duplicated by module id, collection results first).
+    const hasMoreCollection = collectionRows.length > limit;
+    const hasMoreCategory = categoryRows.length > limit;
 
-    query += ` ORDER BY cm.position ASC LIMIT ?`;
-    queryParams.push(limit + 1);
+    const pageCollection = hasMoreCollection ? collectionRows.slice(0, limit) : collectionRows;
+    const pageCategory = hasMoreCategory ? categoryRows.slice(0, limit) : categoryRows;
 
-    const [rows] = await db.query(query, queryParams);
+    const seenIds = new Set(pageCollection.map((row) => row.id));
+    const pageCategoryUnique = pageCategory.filter((row) => !seenIds.has(row.id));
+    const page = [...pageCollection, ...pageCategoryUnique].slice(0, limit);
 
-    // 3. Handle Pagination Logic
-    const hasMore = rows.length > limit;
-    const data = hasMore ? rows.slice(0, limit) : rows;
-    const nextCursor = hasMore ? data[data.length - 1].position : null;
+    const hasMore = hasMoreCollection || hasMoreCategory;
+
+    const nextCollectionCursor = pageCollection.length
+      ? pageCollection[pageCollection.length - 1].position
+      : collectionCursor;
+    const nextCategoryCursor = pageCategory.length
+      ? pageCategory[pageCategory.length - 1].position
+      : categoryCursor;
+
+    const nextCursor = hasMore
+      ? (category_id ? JSON.stringify({ c: nextCollectionCursor, m: nextCategoryCursor }) : nextCollectionCursor)
+      : null;
 
     return {
       sections: [
         {
           ...collection,
-          modules: data.map((row, index) => ({
+          modules: page.map((row, index) => ({
             ...row,
             rank_count: index + 1
           })),
@@ -320,9 +356,53 @@ export const get_section_content = asyncHandler(async (req, res) => {
 
   if (!result) return res.status(404).json({ message: "Section not found" });
 
-  // 4. Return in the exact same format as Home Page Collections
+  // 5. Return in the exact same format as Home Page Collections
   return sendSuccess(res, { initial_data: result });
 });
+
+// Fetch modules linked to a collection via collection_modules, ordered/paginated by position.
+const fetchCollectionModules = async (db, section_id, cursor, limit) => {
+  let query = `
+    SELECT m.id, m.title, m.thumbnail_url, m.is_free, cm.collection_id, cm.position
+    FROM collection_modules cm
+    JOIN modules m ON cm.module_id = m.id
+    WHERE cm.collection_id = ? AND m.is_active = 1
+  `;
+  const params = [section_id];
+
+  if (cursor) {
+    query += ` AND cm.position > ?`;
+    params.push(cursor);
+  }
+
+  query += ` ORDER BY cm.position ASC LIMIT ?`;
+  params.push(limit + 1);
+
+  const [rows] = await db.query(query, params);
+  return rows;
+};
+
+// Fetch modules linked to a category via module_category_mapping, ordered/paginated by module id.
+const fetchCategoryModules = async (db, category_id, cursor, limit) => {
+  let query = `
+    SELECT m.id, m.title, m.thumbnail_url, m.is_free, mc.category_id, m.id AS position
+    FROM module_category_mapping mc
+    JOIN modules m ON mc.module_id = m.id
+    WHERE mc.category_id = ? AND m.is_active = 1
+  `;
+  const params = [category_id];
+
+  if (cursor) {
+    query += ` AND m.id > ?`;
+    params.push(cursor);
+  }
+
+  query += ` ORDER BY m.id ASC LIMIT ?`;
+  params.push(limit + 1);
+
+  const [rows] = await db.query(query, params);
+  return rows;
+};
 
 export const getModuleDetails = asyncHandler(async (req, res) => {
   handleValidationErrors(req);

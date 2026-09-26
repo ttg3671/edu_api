@@ -11,18 +11,22 @@ import { clearCache } from "../utils/cache.js";
 import logger from "../libs/logger.js";
 
 export const signOutAdmin = asyncHandler(async (req, res) => {
+  handleValidationErrors(req);
+
+  const user_id = req.user?.id;
   const cookies = req.cookies;
+
+  // logger.info(`cookies: ${JSON.stringify(req.cookies)}`, { cookies: req.cookies });
 
   if (!cookies?.XXAFIT) {
     return res.sendStatus(204);
   }
 
-  const refreshToken = cookies.XXAFIT;
   const db = await dbConnectionPromise; 
 
   await db.query(
-    "UPDATE admin SET rem_token = NULL WHERE rem_token = ?", 
-    [refreshToken]
+    "UPDATE admin SET rem_token = NULL WHERE id = ?", 
+    [user_id]
   );
 
   res.clearCookie("XXAFIT", {
@@ -46,7 +50,7 @@ export const signOut = asyncHandler(async (req, res) => {
     return res.sendStatus(204);
   }
 
-  const refreshToken = cookies.XXAFIT;
+  // const refreshToken = cookies.XXAFIT;
 
   // logger.info(`logout device_id: ${req.body.device_id}`, { device_id: req.body.device_id });
 

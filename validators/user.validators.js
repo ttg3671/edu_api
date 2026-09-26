@@ -51,7 +51,33 @@ export const userValidator = {
       .isInt({ gt: 0 })
       .withMessage("ID must be a positive number"),
     query("limit").optional().isInt({ min: 1, max: 100 }).toInt(),
-    query("cursor").optional().isInt({ min: 0 }).toInt()
+    // When category_id is present, results are a union of collection_modules
+    // (paginated by position) and module_category_mapping (which has no
+    // position column, so it's paginated by module id instead). Since those
+    // two cursors can't share one numeric value, the cursor becomes a small
+    // composite JSON token { c: <position cursor>, m: <module id cursor> }
+    // in that case, and stays a plain non-negative integer otherwise.
+    query("cursor")
+      .optional()
+      .custom((value, { req }) => {
+        if (req.query.category_id) {
+          let parsed;
+          try {
+            parsed = JSON.parse(value);
+          } catch {
+            throw new Error("cursor must be a valid pagination token");
+          }
+          const isValidField = (v) => v === undefined || v === null || (Number.isInteger(v) && v >= 0);
+          if (typeof parsed !== "object" || parsed === null || !isValidField(parsed.c) || !isValidField(parsed.m)) {
+            throw new Error("cursor must be a valid pagination token");
+          }
+          return true;
+        }
+        if (!/^\d+$/.test(String(value))) {
+          throw new Error("cursor must be a non-negative integer");
+        }
+        return true;
+      })
   ],
 
   getModuleDetails: [

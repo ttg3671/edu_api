@@ -173,5 +173,15 @@ export const userValidator = {
       .bail()
       .isInt({ min: 0 })
       .withMessage("total_duration_ms must be a non-negative integer (milliseconds)")
+  ],
+
+  deleteContinueWatching: [
+    param("id")
+      .notEmpty()
+      .withMessage("id is required")
+      .bail()
+      .isInt({ min: 1 })
+      .withMessage("id must be a positive integer")
+      .toInt()
   ]
 };

@@ -710,6 +710,31 @@ export const update_continue_watching = asyncHandler(async (req, res) => {
 export const save_continue_watching = update_continue_watching;
 
 /**
+ * Delete a continue watching record by id for the current user
+ */
+export const delete_continue_watching_by_id = asyncHandler(async (req, res) => {
+  handleValidationErrors(req);
+  const user_id = req.user?.id;
+  if (!user_id) throw createError("Unauthorized", 401);
+
+  const { id } = req.params;
+  const db = await dbConnectionPromise;
+
+  const [result] = await db.query(
+    "DELETE FROM continue_watching WHERE id = ? AND user_id = ?",
+    [id, user_id]
+  );
+
+  if (!result.affectedRows) {
+    throw createError("Continue watching record not found", 404);
+  }
+
+  await clearCache(`continue_watching:${user_id}`);
+
+  return sendSuccess(res, "Continue watching record deleted successfully");
+});
+
+/**
  * Get paginated list of continue watching videos for the current user (includes id, video_id, thumbnail, lesson_title, module_id)
  */
 export const get_continue_watching_list = asyncHandler(async (req, res) => {

@@ -12,7 +12,8 @@ import {
   get_latest_subscription,
   update_continue_watching,
   get_continue_watching_list,
-  get_continue_watching_by_id
+  get_continue_watching_by_id,
+  delete_continue_watching_by_id
 } from "../controllers/user.controllers.js";
 
 import { userValidator } from "../validators/user.validators.js";
@@ -124,6 +125,14 @@ userRouter.get(
   authMiddleware,
   authorizeRoles(UserRole.USER),
   get_continue_watching_by_id
+);
+
+userRouter.delete(
+  "/continue-watching/:id",
+  authMiddleware,
+  authorizeRoles(UserRole.USER),
+  userValidator.deleteContinueWatching,
+  delete_continue_watching_by_id
 );
 
 export default userRouter;

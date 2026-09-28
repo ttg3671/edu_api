@@ -5,6 +5,7 @@ import {
   get_home_data,
   get_nav_pill_collections,
   getModuleDetails,
+  get_free_module_video,
   get_section_content,
   getModulesLessonsData,
   get_lesson_data,
@@ -65,6 +66,13 @@ userRouter.get(
   "/modules/:module_id",
   userValidator.getModuleDetails, 
   getModuleDetails
+);
+
+// Get free module video link by module_id (public)
+userRouter.get(
+  "/free-modules/:module_id/video",
+  userValidator.getModuleDetails,
+  get_free_module_video
 );
 
 // Get module with lessons (paginated)

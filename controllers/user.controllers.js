@@ -424,18 +424,47 @@ export const getModuleDetails = asyncHandler(async (req, res) => {
           JOIN lessons l ON v.lesson_id = l.id 
           JOIN syllabus s ON l.syllabus_id = s.id 
           WHERE s.module_id = m.id
-        ) AS videos_count
-      FROM modules m 
-      WHERE m.id = ? AND m.is_active = 1 
+        ) AS videos_count,
+        (SELECT COUNT(*) FROM syllabus s WHERE s.module_id = m.id) AS syllabus_count,
+        (SELECT COUNT(*) FROM syllabus s WHERE s.module_id = m.id AND s.title IS NOT NULL) AS titled_syllabus_count,
+        (
+          SELECT COUNT(*)
+          FROM lessons l
+          JOIN syllabus s ON l.syllabus_id = s.id
+          WHERE s.module_id = m.id
+        ) AS lessons_count,
+        (
+          SELECT COUNT(*)
+          FROM lessons l
+          JOIN syllabus s ON l.syllabus_id = s.id
+          WHERE s.module_id = m.id AND l.title IS NOT NULL
+        ) AS titled_lessons_count
+      FROM modules m
+      WHERE m.id = ? AND m.is_active = 1
       LIMIT 1`,
       [module_id]
     );
 
     if (!moduleDetails) return null;
 
+    const {
+      syllabus_count,
+      titled_syllabus_count,
+      lessons_count,
+      titled_lessons_count,
+      ...details
+    } = moduleDetails;
+
+    // Freemium modules hold a single untitled syllabus -> lesson -> video chain
+    const freemium = Number(syllabus_count) === 1
+      && Number(lessons_count) === 1
+      && Number(titled_syllabus_count) === 0
+      && Number(titled_lessons_count) === 0 ? 1 : 0;
+
     return {
-      ...moduleDetails,
-      videos_count: Number(moduleDetails.videos_count || 0)
+      ...details,
+      videos_count: Number(details.videos_count || 0),
+      freemium
     };
   });
 
@@ -444,6 +473,38 @@ export const getModuleDetails = asyncHandler(async (req, res) => {
   }
 
   return sendSuccess(res, result);
+});
+
+export const get_free_module_video = asyncHandler(async (req, res) => {
+  handleValidationErrors(req);
+  const { module_id } = req.params;
+  const db = await dbConnectionPromise;
+
+  // A free module holds a single syllabus -> lesson -> video chain; take the first video
+  const [[video]] = await db.query(`
+    SELECT v.video_provider_id, v.ui_style, v.thumbnail_url
+    FROM modules m
+    JOIN syllabus s ON s.module_id = m.id
+    JOIN lessons l ON l.syllabus_id = s.id
+    JOIN videos v ON v.lesson_id = l.id
+    WHERE m.id = ? AND m.is_free = 1 AND m.is_active = 1
+    ORDER BY s.position ASC, l.position ASC
+    LIMIT 1
+  `, [module_id]);
+
+  if (!video) throw createError("Free module video not found", 404);
+
+  const cacheKey = `vimeo:${video.video_provider_id}`;
+  const videoData = await getOrSetCache(cacheKey, async () => {
+    const vimeoResponse = await fetchVimeoVideoData(video.video_provider_id);
+    return vimeoResponse?.data || null;
+  }, 86400 * 7); // Cache vimeo data for 7 days
+
+  return sendSuccess(res, {
+    ...videoData,
+    ui_style: video.ui_style,
+    thumbnail: video.thumbnail_url
+  });
 });
 
 export const getModulesLessonsData = asyncHandler(async (req, res) => {

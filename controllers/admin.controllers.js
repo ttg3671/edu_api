@@ -2117,6 +2117,8 @@ export const getVideoByLessonID = asyncHandler(async (req, res) => {
     [lesson_id]
   );
 
+  // console.log(lesson_id, videoRows);
+
   if (!videoRows) {
     return sendSuccess(res, null);
   }

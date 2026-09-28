@@ -1835,6 +1835,233 @@ export const lessons_search = asyncHandler(async (req, res) => {
 });
 
 
+// --------------- FREE MODULES CRUD ---------------------
+
+
+export const free_modules_post = asyncHandler(async (req, res) => {
+  handleValidationErrors(req);
+
+  const db = await dbConnectionPromise;
+  const { title, description, thumbnail_url, video_provider_id, ui_style = 'horizontal' } = req.body;
+
+  // Resolve the Vimeo video BEFORE opening the transaction so no DB locks are held during the network call
+  const videoResult = await fetchVimeoVideoData(video_provider_id);
+
+  if (!videoResult?.data?.video) {
+    throw createError("Video not found on Vimeo or has no playable files", 400);
+  }
+
+  const ids = await withTransaction(db, async (connection) => {
+    const [[existingModule]] = await connection.query(
+      "SELECT id FROM modules WHERE title = ? LIMIT 1",
+      [title]
+    );
+
+    if (existingModule) {
+      throw createError("This module already exists", 400);
+    }
+
+    const [moduleResult] = await connection.query(
+      "INSERT INTO `modules`(`title`, `description`, `thumbnail_url`, `is_active`, `is_free`) VALUES(?,?,?,?,?)",
+      [title, description ?? null, thumbnail_url, true, true]
+    );
+    const moduleId = moduleResult.insertId;
+
+    const [[syllabusMax]] = await connection.query(
+      "SELECT MAX(position) as maxPos FROM syllabus"
+    );
+    const [syllabusResult] = await connection.query(
+      "INSERT INTO syllabus (module_id, title, workout_instructions, position) VALUES (?, ?, ?, ?)",
+      [moduleId, null, null, (syllabusMax?.maxPos || 0) + 1000.0]
+    );
+    const syllabusId = syllabusResult.insertId;
+
+    const [[lessonMax]] = await connection.query(
+      "SELECT MAX(position) as maxPos FROM lessons"
+    );
+    const [lessonResult] = await connection.query(
+      "INSERT INTO lessons (syllabus_id, title, workout_instructions, position) VALUES (?, ?, ?, ?)",
+      [syllabusId, null, null, (lessonMax?.maxPos || 0) + 1000.0]
+    );
+    const lessonId = lessonResult.insertId;
+
+    const [videoInsert] = await connection.query(
+      "INSERT INTO videos (lesson_id, video_provider_id, thumbnail_url, ui_style) VALUES (?, ?, ?, ?)",
+      [lessonId, videoResult.data.video, videoResult.data.thumbnail, ui_style]
+    );
+
+    return {moduleId};
+  });
+
+  // Invalidate caches AFTER transaction commit to eliminate race conditions
+  await Promise.all([
+    clearFreeModuleCaches(ids.moduleId),
+    clearCache(`vimeo:${video_provider_id}`)
+  ]);
+
+  return sendSuccess(res, ids.moduleId);
+});
+
+// A free module is a module with is_free = 1 holding a single syllabus -> lesson -> video chain
+const getFreeModuleChain = async (conn, moduleId, forUpdate = false) => {
+  const [[row]] = await conn.query(
+    `
+      SELECT m.id AS module_id, m.title, m.description, m.thumbnail_url, m.is_active,
+      l.id as lesson_id, v.id AS video_id, v.video_provider_id, v.ui_style
+      FROM modules AS m
+      LEFT JOIN syllabus AS s ON s.module_id = m.id
+      LEFT JOIN lessons AS l ON l.syllabus_id = s.id
+      LEFT JOIN videos AS v ON v.lesson_id = l.id
+      WHERE m.id = ? AND m.is_free = 1
+      ORDER BY s.position ASC, l.position ASC
+      LIMIT 1
+      ${forUpdate ? "FOR UPDATE" : ""}
+    `,
+    [moduleId]
+  );
+
+  return row;
+};
+
+const clearFreeModuleCaches = (moduleId) => Promise.all([
+  clearCache("cache:/api/v1/users/home*"),
+  clearCache("cache:/api/v1/users/search*"),
+  clearCache("cache:/api/v1/users/nav-pill*"),
+  clearCache("cache:/api/v1/users/section*"),
+  clearCache(`cache:/api/v1/users/modules/${moduleId}*`),
+  clearCache(`cache:/api/v1/users/modules-lessons/${moduleId}*`)
+]);
+
+export const free_modules_get = asyncHandler(async (req, res) => {
+  handleValidationErrors(req);
+
+  const db = await dbConnectionPromise;
+  const { limit, cursor } = getCursorPaginationParams(req.query);
+
+  const [data] = await db.query(
+    `
+      SELECT m.id, m.title, m.thumbnail_url, m.is_active
+      FROM modules AS m
+      WHERE m.is_free = 1 ${cursor ? "AND m.id < ?" : ""}
+      ORDER BY m.id DESC
+      LIMIT ?
+    `,
+    cursor ? [cursor, limit + 1] : [limit + 1]
+  );
+
+  const hasMore = data.length > limit;
+  const modules = hasMore ? data.slice(0, limit) : data;
+  const nextCursor = hasMore ? modules[modules.length - 1].id : null;
+
+  return sendCursorPaginatedResponse(res, modules, { nextCursor, hasMore });
+});
+
+export const free_modules_edit = asyncHandler(async (req, res) => {
+  handleValidationErrors(req);
+
+  const db = await dbConnectionPromise;
+  const freeModule = await getFreeModuleChain(db, req.params.id);
+
+  if (!freeModule) {
+    throw createError("Free module not found...", 404);
+  }
+
+  return sendSuccess(res, freeModule);
+});
+
+export const free_modules_update = asyncHandler(async (req, res) => {
+  handleValidationErrors(req);
+
+  const db = await dbConnectionPromise;
+  const id = parseInt(req.params.id);
+  const { title, description, thumbnail_url, video_provider_id, ui_style = 'horizontal', is_active = true } = req.body;
+
+  // Resolve the Vimeo video BEFORE opening the transaction so no DB locks are held during the network call
+  const videoResult = await fetchVimeoVideoData(video_provider_id);
+
+  if (!videoResult?.data?.video) {
+    throw createError("Video not found on Vimeo or has no playable files", 400);
+  }
+
+  const oldVideoProviderId = await withTransaction(db, async (connection) => {
+    const chain = await getFreeModuleChain(connection, id, true);
+
+    if (!chain) {
+      throw createError("Free module not found...", 404);
+    }
+
+    const [[duplicateTitle]] = await connection.query(
+      "SELECT id FROM modules WHERE title = ? AND id != ? LIMIT 1",
+      [title, id]
+    );
+
+    if (duplicateTitle) {
+      throw createError("This module already exists", 400);
+    }
+
+    await connection.query(
+      "UPDATE `modules` SET `title`=?, `description`=?, `thumbnail_url`=?, `is_active`=? WHERE id=?",
+      [title, description ?? null, thumbnail_url, is_active, id]
+    );
+
+    if (chain.video_id) {
+      await connection.query(
+        "UPDATE videos SET video_provider_id=?, thumbnail_url=?, ui_style=? WHERE id=?",
+        [videoResult.data.video, videoResult.data.thumbnail, ui_style, chain.video_id]
+      );
+    } else {
+      await connection.query(
+        "INSERT INTO videos (lesson_id, video_provider_id, thumbnail_url, ui_style) VALUES (?, ?, ?, ?)",
+        [chain.lesson_id, videoResult.data.video, videoResult.data.thumbnail, ui_style]
+      );
+    }
+
+    return chain.video_provider_id;
+  });
+
+  // Invalidate caches AFTER transaction commit to eliminate race conditions
+  await Promise.all([
+    clearFreeModuleCaches(id),
+    clearCache(`vimeo:${video_provider_id}`),
+    oldVideoProviderId && oldVideoProviderId !== video_provider_id
+      ? clearCache(`vimeo:${oldVideoProviderId}`)
+      : null
+  ]);
+
+  return sendSuccess(res, "", "Free module updated successfully");
+});
+
+export const free_modules_delete = asyncHandler(async (req, res) => {
+  handleValidationErrors(req);
+
+  const db = await dbConnectionPromise;
+  const id = parseInt(req.params.id);
+
+  const videoProviderIds = await withTransaction(db, async (connection) => {
+    const [[exists]] = await connection.query(
+      "SELECT 1 FROM modules WHERE id = ? AND is_free = 1 LIMIT 1 FOR UPDATE",
+      [id]
+    );
+
+    if (!exists) {
+      throw createError("Free module not found...", 404);
+    }
+
+    await connection.query("DELETE FROM collection_modules WHERE module_id = ?", [id]);
+    await connection.query("DELETE FROM module_category_mapping WHERE module_id = ?", [id]);
+    await connection.query("DELETE FROM `modules` WHERE id = ?", [id]);
+  });
+
+  // Invalidate caches AFTER transaction commit to eliminate race conditions
+  await Promise.all([
+    clearFreeModuleCaches(id),
+    clearCache("continue_watching:*")
+  ]);
+
+  return sendSuccess(res, "", "Free module deleted successfully");
+});
+
+
 // ------------ VIMEO VIDEO LINK CRUD ----------------
 
 

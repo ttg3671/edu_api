@@ -3,5 +3,5 @@ export const allowedOrigins = [
 	"https://www.admin.edumovimiento.com",
 	"https://edumovimiento.com",
 	"https://www.edumovimiento.com",
-	"http://localhost:5173"
+	// "http://localhost:5173"
 ]

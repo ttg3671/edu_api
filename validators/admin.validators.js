@@ -209,6 +209,22 @@ export const eduModuleValidators = {
   ],
   delete: [
     param('id').isInt({ gt: 0 }).withMessage('Valid module ID required')
+  ],
+  createFree: [
+    titleValidation('Module title'),
+    body('description').optional({ nullable: true }).trim().isString().withMessage('Description must be a string'),
+    body('thumbnail_url').trim().notEmpty().withMessage("Thumbnail URL is required"),
+    body('video_provider_id').trim().notEmpty().withMessage("video_provider_id is required"),
+    body('ui_style').optional().isIn(['horizontal', 'vertical']).withMessage('Invalid UI style')
+  ],
+  updateFree: [
+    param('id').isInt({ gt: 0 }).withMessage('Valid module ID required'),
+    titleValidation('Module title'),
+    body('description').optional({ nullable: true }).trim().isString().withMessage('Description must be a string'),
+    body('thumbnail_url').trim().notEmpty().withMessage("Thumbnail URL is required"),
+    body('video_provider_id').trim().notEmpty().withMessage("video_provider_id is required"),
+    body('ui_style').optional().isIn(['horizontal', 'vertical']).withMessage('Invalid UI style'),
+    body('is_active').optional().isBoolean().toBoolean()
   ]
 };
 

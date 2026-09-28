@@ -54,6 +54,11 @@ import {
   lessons_search,
   getVideoByLessonID,
   createVideo,
+  free_modules_post,
+  free_modules_get,
+  free_modules_edit,
+  free_modules_update,
+  free_modules_delete,
   updateVideo,
   deleteVideo,
   getUsers,
@@ -139,6 +144,15 @@ adminRouter.delete("/home-config/:id", homePageConfigValidators.delete, home_pag
 // ------------ MODULES ------------
 adminRouter.get("/modules", eduModuleValidators.all, get_all_modules);
 adminRouter.post("/modules", eduModuleValidators.create, modules_post);
+
+// ------------ FREE MODULES ------------
+// Declared before "/modules/:id" so "free" is not captured as a module id
+adminRouter.get("/modules/free", eduModuleValidators.all, free_modules_get);
+adminRouter.post("/modules/free", eduModuleValidators.createFree, free_modules_post);
+adminRouter.get("/modules/free/:id", eduModuleValidators.get, free_modules_edit);
+adminRouter.put("/modules/free/:id", eduModuleValidators.updateFree, free_modules_update);
+adminRouter.delete("/modules/free/:id", eduModuleValidators.delete, free_modules_delete);
+
 adminRouter.get("/modules/filter", eduModuleValidators.search, modules_filter);
 adminRouter.get("/modules/:id", eduModuleValidators.get, modules_edit);
 adminRouter.put("/modules/:id", eduModuleValidators.update, modules_update);
